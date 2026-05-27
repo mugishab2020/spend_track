@@ -33,6 +33,9 @@
     "plugins": ["expo-router"],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "flwPublicKey": "FLWPUBK_TEST-d0c739a647254df5941f092338b1708b-X"
     }
   }
 }

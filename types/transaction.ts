@@ -1,16 +1,7 @@
 export type TransactionType = 'income' | 'expense';
 
-export type TransactionCategory =
-  | 'Salary'
-  | 'Freelance'
-  | 'Investments'
-  | 'Food'
-  | 'Transport'
-  | 'Shopping'
-  | 'Bills'
-  | 'Health'
-  | 'Entertainment'
-  | 'Other';
+// category is now just a string (UUID from backend)
+export type TransactionCategory = string;
 
 export type Transaction = {
   id: string;

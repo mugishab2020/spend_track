@@ -1,8 +1,8 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { formatCurrency } from "@/utils/money";
 import { useTheme } from "@/context/ThemeContext";
+import { formatCurrency } from "@/utils/money";
 
 type Props = {
   balance: number;
@@ -38,17 +38,17 @@ export function BalanceCard({ balance, income, expenses }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#6366F1", // Changed from dark to purple/indigo
+    backgroundColor: "transparent", // Transparent total balance card
     borderRadius: 20,
     padding: 20,
-    shadowColor: "#6366F1",
+    shadowColor: "transparent",
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 0,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   label: {
     color: "#9CA3AF",

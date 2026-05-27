@@ -7,16 +7,28 @@ import {
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import "react-native-reanimated";
+import { registerForNotifications, injectNotificationStore } from "@/services/notifications.service";
 
 import { useColorScheme } from "@/components/useColorScheme";
+import { AuthProvider } from "@/context/AuthContext";
+import { CategoriesProvider } from "@/context/CategoriesContext";
+import { NotificationsProvider, useNotifications } from "@/context/NotificationsContext";
+import { SavingTargetsProvider } from "@/context/SavingTargetsContext";
+import { ThemeProvider as CustomThemeProvider, useTheme } from "@/context/ThemeContext";
 import { TransactionsProvider } from "@/context/TransactionsContext";
-import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
+
+function NotificationStoreBridge() {
+  const { addNotification } = useNotifications();
+  useEffect(() => { injectNotificationStore(addNotification); }, [addNotification]);
+  return null;
+}
 
 export {
   // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
+  ErrorBoundary
 } from "expo-router";
 
 export const unstable_settings = {
@@ -41,6 +53,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
+      registerForNotifications();
     }
   }, [loaded]);
 
@@ -51,26 +64,44 @@ export default function RootLayout() {
   return <RootLayoutNav />;
 }
 
+function ThemedStatusBar() {
+  const { isDark } = useTheme();
+  // light background → dark icons/text, dark background → light icons/text
+  return <StatusBar style={isDark ? "light" : "dark"} />;
+}
+
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
 
   return (
     <CustomThemeProvider>
-      <TransactionsProvider>
-        <ThemeProvider
-          value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-        >
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="profile" options={{ title: "Profile" }} />
-            <Stack.Screen
-              name="notifications"
-              options={{ title: "Notifications" }}
-            />
-            <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-          </Stack>
-        </ThemeProvider>
-      </TransactionsProvider>
+      <NotificationsProvider>
+        <AuthProvider>
+          <CategoriesProvider>
+            <SavingTargetsProvider>
+              <TransactionsProvider>
+                <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+                  <ThemedStatusBar />
+                  <NotificationStoreBridge />
+                  <Stack>
+                    <Stack.Screen name="landing" options={{ headerShown: false }} />
+                    <Stack.Screen name="login" options={{ headerShown: false }} />
+                    <Stack.Screen name="register" options={{ headerShown: false }} />
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen name="profile" options={{ headerShown: false }} />
+                    <Stack.Screen name="notifications" options={{ headerShown: false }} />
+                    <Stack.Screen name="ai-chat" options={{ headerShown: false }} />
+                    <Stack.Screen name="ai-insights" options={{ headerShown: false }} />
+                    <Stack.Screen name="meal-plan" options={{ headerShown: false }} />
+                    <Stack.Screen name="transport-plan" options={{ headerShown: false }} />
+                    <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+                  </Stack>
+                </ThemeProvider>
+              </TransactionsProvider>
+            </SavingTargetsProvider>
+          </CategoriesProvider>
+        </AuthProvider>
+      </NotificationsProvider>
     </CustomThemeProvider>
   );
 }

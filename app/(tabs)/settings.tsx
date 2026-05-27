@@ -1,260 +1,242 @@
-import React, { useState } from "react";
-import { SafeAreaView, StyleSheet, Text, View, ScrollView, TouchableOpacity, Switch, Alert, Modal, FlatList } from "react-native";
-import { FontAwesome } from "@expo/vector-icons";
-import { useTheme } from "@/context/ThemeContext";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import TopBar from "@/components/TopBar";
 import { router } from "expo-router";
+import React, { useState } from "react";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-type SettingItemProps = {
-  title: string;
-  subtitle?: string;
-  icon: string;
-  onPress?: () => void;
-  rightComponent?: React.ReactNode;
-};
+import { useAuth } from "@/context/AuthContext";
+import { useTheme, type ThemeType, type CurrencyType } from "@/context/ThemeContext";
+import { apiClient } from "@/services/api";
 
-function SettingItem({ title, subtitle, icon, onPress, rightComponent }: SettingItemProps) {
-  const { colors } = useTheme();
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const PRIMARY = "#006859";
+const ON_PRIMARY = "#ffffff";
+const SECONDARY = "#006c49";
+const SECONDARY_CONTAINER = "#6cf8bb";
+const PRIMARY_FIXED = "#9af3de";
+const PRIMARY_FIXED_DIM = "#7ed6c2";
+const SECONDARY_FIXED = "#6ffbbe";
+const TERTIARY_FIXED = "#ffdad2";
+const SURFACE = "#f6faf7";
+const SURFACE_LOWEST = "#ffffff";
+const SURFACE_CONTAINER = "#ebefec";
+const SURFACE_CONTAINER_LOW = "#f1f4f2";
+const SURFACE_CONTAINER_HIGH = "#e5e9e6";
+const SURFACE_CONTAINER_HIGHEST = "#dfe3e1";
+const ON_SURFACE = "#181d1b";
+const ON_SURFACE_VARIANT = "#3e4946";
+const OUTLINE = "#6e7a76";
+const OUTLINE_VARIANT = "#bdc9c4";
+const ERROR = "#ba1a1a";
+const ERROR_CONTAINER = "#ffdad6";
 
-  return (
-    <TouchableOpacity style={[styles.settingItem, { borderBottomColor: colors.borderLight }]} onPress={onPress} disabled={!onPress}>
-      <View style={styles.settingLeft}>
-        <View style={[styles.iconContainer, { backgroundColor: colors.primaryLight }]}>
-          <FontAwesome name={icon as any} size={20} color={colors.primary} />
-        </View>
-        <View style={styles.settingText}>
-          <Text style={[styles.settingTitle, { color: colors.text }]}>{title}</Text>
-          {subtitle && <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
-        </View>
-      </View>
-      {rightComponent && <View style={styles.settingRight}>{rightComponent}</View>}
-    </TouchableOpacity>
-  );
-}
-
-function SettingSection({ title, children }: { title: string; children: React.ReactNode }) {
-  const { colors } = useTheme();
-
-  return (
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title}</Text>
-      <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-        {children}
-      </View>
-    </View>
-  );
-}
+const CURRENCIES: { code: CurrencyType; name: string; symbol: string }[] = [
+  { code: "RWF", name: "Rwandan Franc", symbol: "Frw" },
+  { code: "USD", name: "US Dollar", symbol: "$" },
+  { code: "EUR", name: "Euro", symbol: "€" },
+  { code: "GBP", name: "British Pound", symbol: "£" },
+  { code: "JPY", name: "Japanese Yen", symbol: "¥" },
+  { code: "CAD", name: "Canadian Dollar", symbol: "CA$" },
+  { code: "AUD", name: "Australian Dollar", symbol: "A$" },
+  { code: "CHF", name: "Swiss Franc", symbol: "Fr" },
+];
 
 export default function SettingsScreen() {
-  const { theme, colors, setTheme, isDark, currency, setCurrency } = useTheme();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
-  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const { user, logout } = useAuth();
+  const { theme, setTheme, currency, setCurrency } = useTheme();
+  const [notificationsOn, setNotificationsOn] = useState(true);
+  const [currencyModal, setCurrencyModal] = useState(false);
+  const [pendingCurrency, setPendingCurrency] = useState<CurrencyType>(currency as CurrencyType);
 
-  const currencies = [
-    { code: 'USD', symbol: '$', name: 'US Dollar' },
-    { code: 'EUR', symbol: '€', name: 'Euro' },
-    { code: 'GBP', symbol: '£', name: 'British Pound' },
-    { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
-    { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
-    { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
-    { code: 'CHF', symbol: 'CHF', name: 'Swiss Franc' },
-    { code: 'CNY', symbol: '¥', name: 'Chinese Yuan' },
-    { code: 'SEK', symbol: 'kr', name: 'Swedish Krona' },
-    { code: 'NZD', symbol: 'NZ$', name: 'New Zealand Dollar' },
-  ];
+  const initials = (user?.full_name || user?.email || "U").slice(0, 2).toUpperCase();
 
-  const handleExportData = () => {
-    Alert.alert(
-      "Export Data",
-      "This will export all your transaction data. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Export", onPress: () => Alert.alert("Success", "Data exported successfully!") },
-      ]
-    );
+  const handleLogout = () => {
+    Alert.alert("Logout", "Sign out of your account?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Logout", style: "destructive", onPress: async () => { await logout(); router.replace("/login"); } },
+    ]);
   };
 
   const handleClearData = () => {
-    Alert.alert(
-      "Clear All Data",
-      "This will permanently delete all your transactions. This action cannot be undone. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: () => Alert.alert("Success", "All data cleared!") },
-      ]
-    );
+    Alert.alert("Clear All Data", "This will permanently delete all your transactions and categories. This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete Everything", style: "destructive", onPress: () => Alert.alert("Not implemented", "Contact support to delete your account.") },
+    ]);
   };
 
-  const handleAbout = () => {
-    Alert.alert(
-      "About SpendTrack",
-      "Version 1.0.0\n\nA simple and intuitive expense tracking app to help you manage your finances.\n\n© 2026 SpendTrack",
-      [{ text: "OK" }]
-    );
+  const confirmCurrency = async () => {
+    await setCurrency(pendingCurrency);
+    // Also update on backend
+    try { await apiClient.put("/users/me", { currency: pendingCurrency }); } catch {}
+    setCurrencyModal(false);
   };
+
+  const curObj = CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0];
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={s.safe}>
+      <TopBar title="Settings" />
 
-        <SettingSection title="Account">
-          <SettingItem
-            title="Profile"
-            subtitle="Update your personal information"
-            icon="user"
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* ── Account ── */}
+        <Text style={s.sectionLabel}>ACCOUNT</Text>
+        <View style={s.card}>
+          <SettingRow
+            iconBg={PRIMARY_FIXED} icon="user" iconColor="#005144"
+            title="Profile" sub="Update your personal information"
             onPress={() => router.push("/profile")}
+            right={<FontAwesome name="chevron-right" size={14} color={OUTLINE_VARIANT} />}
           />
-          <SettingItem
-            title="Currency"
-            subtitle={`${currencies.find(c => c.code === currency)?.symbol} ${currency}`}
-            icon="dollar"
-            onPress={() => setCurrencyModalVisible(true)}
+          <Divider />
+          <SettingRow
+            iconBg={SECONDARY_FIXED} icon="money" iconColor="#005236"
+            title="Currency" sub={`${curObj.name} (${curObj.symbol})`}
+            onPress={() => { setPendingCurrency(currency as CurrencyType); setCurrencyModal(true); }}
+            right={<FontAwesome name="chevron-right" size={14} color={OUTLINE_VARIANT} />}
           />
-        </SettingSection>
+          <Divider />
+          <SettingRow
+            iconBg={ERROR_CONTAINER} icon="sign-out" iconColor={ERROR}
+            title="Logout" titleColor={ERROR} sub="Sign out of your account"
+            onPress={handleLogout}
+          />
+        </View>
 
-        <SettingSection title="Preferences">
-          <SettingItem
-            title="Notifications"
-            subtitle="Receive transaction alerts and reminders"
-            icon="bell"
-            rightComponent={
+        {/* ── Preferences ── */}
+        <Text style={s.sectionLabel}>PREFERENCES</Text>
+        <View style={s.card}>
+          <SettingRow
+            iconBg={PRIMARY_FIXED_DIM} icon="bell" iconColor="#005144"
+            title="Notifications" sub="Transaction alerts and reminders"
+            right={
               <Switch
-                value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
-                trackColor={{ false: '#E2E8F0', true: '#3B82F6' }}
-                thumbColor={notificationsEnabled ? '#FFFFFF' : '#F1F5F9'}
+                value={notificationsOn}
+                onValueChange={setNotificationsOn}
+                trackColor={{ false: OUTLINE_VARIANT, true: PRIMARY }}
+                thumbColor={ON_PRIMARY}
               />
             }
           />
-          <SettingItem
-            title="Dark Mode"
-            subtitle={theme === 'system' ? 'Follow system' : theme === 'dark' ? 'Enabled' : 'Disabled'}
-            icon="moon-o"
-            rightComponent={
-              <TouchableOpacity
-                style={styles.themeSelector}
-                onPress={() => {
-                  const nextTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
-                  setTheme(nextTheme);
-                }}
-              >
-                <Text style={[styles.themeText, { color: colors.text }]}>
-                  {theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System'}
-                </Text>
-                <FontAwesome
-                  name={theme === 'light' ? 'sun-o' : theme === 'dark' ? 'moon-o' : 'mobile'}
-                  size={16}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
+          <Divider />
+          <SettingRow
+            iconBg={SURFACE_CONTAINER_HIGHEST} icon="moon-o" iconColor={ON_SURFACE_VARIANT}
+            title="Dark Mode" sub={theme === "system" ? "Follow system" : theme === "dark" ? "On" : "Off"}
+            right={
+              <View style={s.themeToggle}>
+                {(["system", "light", "dark"] as ThemeType[]).map((t) => (
+                  <Pressable key={t} style={[s.themeBtn, theme === t && s.themeBtnActive]} onPress={() => setTheme(t)}>
+                    <Text style={[s.themeBtnText, theme === t && { color: PRIMARY }]}>
+                      {t === "system" ? "Auto" : t === "light" ? "Off" : "On"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
             }
           />
-          <SettingItem
-            title="Biometric Authentication"
-            subtitle="Use fingerprint or face ID"
-            icon="lock"
-            rightComponent={
-              <Switch
-                value={biometricEnabled}
-                onValueChange={setBiometricEnabled}
-                trackColor={{ false: '#E2E8F0', true: '#3B82F6' }}
-                thumbColor={biometricEnabled ? '#FFFFFF' : '#F1F5F9'}
-              />
-            }
+          <Divider />
+          <SettingRow
+            iconBg={TERTIARY_FIXED} icon="lock" iconColor="#753323"
+            title="Security" sub="Biometric Authentication"
+            right={<Switch value={false} trackColor={{ false: OUTLINE_VARIANT, true: PRIMARY }} thumbColor={ON_PRIMARY} />}
           />
-        </SettingSection>
+        </View>
 
-        <SettingSection title="Data Management">
-          <SettingItem
-            title="Export Data"
-            subtitle="Download your transaction history"
-            icon="download"
-            onPress={handleExportData}
+        {/* ── Data Management ── */}
+        <Text style={s.sectionLabel}>DATA MANAGEMENT</Text>
+        <View style={s.card}>
+          <SettingRow
+            iconBg={SURFACE_CONTAINER_LOW} icon="download" iconColor={ON_SURFACE_VARIANT}
+            title="Export Data" sub="Download transaction history"
+            onPress={() => Alert.alert("Coming soon", "Export feature is coming soon.")}
+            right={<FontAwesome name="chevron-right" size={14} color={OUTLINE_VARIANT} />}
           />
-          <SettingItem
-            title="Import Data"
-            subtitle="Import transactions from file"
-            icon="upload"
-            onPress={() => Alert.alert("Import", "Import feature coming soon!")}
+          <Divider />
+          <SettingRow
+            iconBg={SURFACE_CONTAINER_LOW} icon="upload" iconColor={ON_SURFACE_VARIANT}
+            title="Import Data" sub="Import transactions from file"
+            onPress={() => Alert.alert("Coming soon", "Import feature is coming soon.")}
+            right={<FontAwesome name="chevron-right" size={14} color={OUTLINE_VARIANT} />}
           />
-          <SettingItem
-            title="Clear All Data"
-            subtitle="Permanently delete all transactions"
-            icon="trash"
+          <Divider />
+          <SettingRow
+            iconBg={ERROR_CONTAINER} icon="trash" iconColor={ERROR}
+            title="Clear All Data" titleColor={ERROR} sub="Permanently delete everything"
             onPress={handleClearData}
           />
-        </SettingSection>
+        </View>
 
-        <SettingSection title="Support">
-          <SettingItem
+        {/* ── Support ── */}
+        <Text style={s.sectionLabel}>SUPPORT</Text>
+        <View style={s.card}>
+          <SettingRow
+            iconBg={SECONDARY_CONTAINER + "50"} icon="question-circle" iconColor={SECONDARY}
             title="Help & Support"
-            subtitle="Get help and contact support"
-            icon="question-circle"
-            onPress={() => Alert.alert("Help", "Help center coming soon!")}
+            right={<FontAwesome name="external-link" size={14} color={OUTLINE_VARIANT} />}
+            onPress={() => Alert.alert("Support", "Email: support@spendtrack.app")}
           />
-          <SettingItem
+          <Divider />
+          <SettingRow
+            iconBg={SECONDARY_CONTAINER + "50"} icon="shield" iconColor={SECONDARY}
             title="Privacy Policy"
-            subtitle="Read our privacy policy"
-            icon="shield"
-            onPress={() => Alert.alert("Privacy", "Privacy policy coming soon!")}
+            right={<FontAwesome name="chevron-right" size={14} color={OUTLINE_VARIANT} />}
           />
-          <SettingItem
-            title="Terms of Service"
-            subtitle="Read our terms and conditions"
-            icon="file-text-o"
-            onPress={() => Alert.alert("Terms", "Terms of service coming soon!")}
-          />
-        </SettingSection>
+        </View>
 
-        <SettingSection title="About">
-          <SettingItem
-            title="About SpendTrack"
-            subtitle="Version 1.0.0"
-            icon="info-circle"
-            onPress={handleAbout}
-          />
-        </SettingSection>
+        {/* Footer */}
+        <View style={s.footer}>
+          <View style={s.footerCircle}>
+            <FontAwesome name="user" size={32} color={PRIMARY} style={{ opacity: 0.3 }} />
+          </View>
+          <Text style={s.footerVersion}>SpendTrack v1.0.0</Text>
+          <Text style={s.footerSub}>Made with care in Kigali</Text>
+        </View>
 
-        <View style={styles.spacer} />
+        <View style={{ height: 40 }} />
       </ScrollView>
 
-      <Modal
-        visible={currencyModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setCurrencyModalVisible(false)}
-      >
-        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Select Currency</Text>
-            <FlatList
-              data={currencies}
-              keyExtractor={(item) => item.code}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.currencyItem, { borderBottomColor: colors.borderLight }]}
-                  onPress={() => {
-                    setCurrency(item.code as any);
-                    setCurrencyModalVisible(false);
-                  }}
-                >
-                  <Text style={[styles.currencySymbol, { color: colors.primary }]}>{item.symbol}</Text>
-                  <View style={styles.currencyText}>
-                    <Text style={[styles.currencyCode, { color: colors.text }]}>{item.code}</Text>
-                    <Text style={[styles.currencyName, { color: colors.textSecondary }]}>{item.name}</Text>
-                  </View>
-                  {currency === item.code && (
-                    <FontAwesome name="check" size={20} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-              )}
-            />
-            <TouchableOpacity
-              style={[styles.closeButton, { backgroundColor: colors.primary }]}
-              onPress={() => setCurrencyModalVisible(false)}
-            >
-              <Text style={[styles.closeButtonText, { color: colors.surface }]}>Close</Text>
-            </TouchableOpacity>
+      {/* Currency modal */}
+      <Modal visible={currencyModal} animationType="slide" transparent onRequestClose={() => setCurrencyModal(false)}>
+        <View style={s.modalOverlay}>
+          <Pressable style={s.modalBackdrop} onPress={() => setCurrencyModal(false)} />
+          <View style={s.modalSheet}>
+            <View style={s.sheetHandle} />
+            <Text style={s.sheetTitle}>Select Currency</Text>
+            <Text style={s.sheetSub}>Choose your primary account currency</Text>
+            <ScrollView style={{ maxHeight: 320, marginBottom: 20 }} showsVerticalScrollIndicator={false}>
+              {CURRENCIES.map((c) => {
+                const selected = pendingCurrency === c.code;
+                return (
+                  <Pressable
+                    key={c.code}
+                    style={[s.currencyRow, selected && s.currencyRowSelected]}
+                    onPress={() => setPendingCurrency(c.code)}
+                  >
+                    <View style={[s.currencySymbol, selected && { backgroundColor: PRIMARY }]}>
+                      <Text style={[s.currencySymbolText, selected && { color: ON_PRIMARY }]}>{c.symbol}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.currencyName}>{c.name}</Text>
+                      <Text style={[s.currencyCode, { color: selected ? PRIMARY : OUTLINE }]}>{c.code}</Text>
+                    </View>
+                    {selected && <FontAwesome name="check-circle" size={20} color={PRIMARY} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable style={s.confirmBtn} onPress={confirmCurrency}>
+              <Text style={s.confirmBtnText}>Confirm Selection</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -262,128 +244,69 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 12,
-    marginLeft: 4,
-  },
-  sectionContent: {
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  settingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-  },
-  settingLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  settingText: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  settingSubtitle: {
-    fontSize: 14,
-  },
-  settingRight: {
-    marginLeft: 12,
-  },
-  themeSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  themeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginRight: 8,
-  },
-  spacer: {
-    height: 40,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '70%',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  currencyItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-  },
-  currencySymbol: {
-    fontSize: 24,
-    width: 40,
-    textAlign: 'center',
-  },
-  currencyText: {
-    flex: 1,
-    marginLeft: 15,
-  },
-  currencyCode: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  currencyName: {
-    fontSize: 14,
-  },
-  closeButton: {
-    marginTop: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
+function SettingRow({ iconBg, icon, iconColor, title, titleColor, sub, onPress, right }: any) {
+  return (
+    <Pressable style={({ pressed }) => [s.row, pressed && onPress && { backgroundColor: SURFACE_CONTAINER_LOW }]} onPress={onPress}>
+      <View style={[s.rowIcon, { backgroundColor: iconBg }]}>
+        <FontAwesome name={icon} size={20} color={iconColor} />
+      </View>
+      <View style={s.rowText}>
+        <Text style={[s.rowTitle, titleColor && { color: titleColor }]}>{title}</Text>
+        {sub && <Text style={s.rowSub}>{sub}</Text>}
+      </View>
+      {right && <View style={s.rowRight}>{right}</View>}
+    </Pressable>
+  );
+}
+
+function Divider() {
+  return <View style={s.divider} />;
+}
+
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: SURFACE },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingVertical: 10, backgroundColor: SURFACE_CONTAINER_LOW },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: PRIMARY_FIXED, justifyContent: "center", alignItems: "center" },
+  avatarText: { fontWeight: "700", fontSize: 14, color: "#00201a" },
+  headerTitle: { fontSize: 24, fontWeight: "700", color: PRIMARY },
+  iconBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center" },
+  scroll: { paddingHorizontal: 20, paddingTop: 20 },
+
+  sectionLabel: { fontSize: 12, fontWeight: "800", letterSpacing: 1, color: OUTLINE, marginBottom: 10, paddingHorizontal: 4 },
+  card: { backgroundColor: SURFACE_LOWEST, borderRadius: 16, overflow: "hidden", marginBottom: 24, shadowColor: "#006859", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
+
+  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 14 },
+  rowIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: "center", alignItems: "center" },
+  rowText: { flex: 1 },
+  rowTitle: { fontSize: 16, fontWeight: "600", color: ON_SURFACE },
+  rowSub: { fontSize: 13, fontWeight: "600", color: ON_SURFACE_VARIANT, marginTop: 1 },
+  rowRight: { alignItems: "center", justifyContent: "center" },
+  divider: { height: 1, backgroundColor: SURFACE_CONTAINER, marginLeft: 78 },
+
+  themeToggle: { flexDirection: "row", backgroundColor: SURFACE_CONTAINER_LOW, borderRadius: 8, padding: 3 },
+  themeBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 },
+  themeBtnActive: { backgroundColor: SURFACE_LOWEST, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
+  themeBtnText: { fontSize: 12, fontWeight: "800", color: OUTLINE },
+
+  footer: { alignItems: "center", paddingVertical: 24, opacity: 0.6 },
+  footerCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: SECONDARY_CONTAINER + "30", justifyContent: "center", alignItems: "center", marginBottom: 12 },
+  footerVersion: { fontSize: 12, fontWeight: "800", letterSpacing: 0.5, color: OUTLINE },
+  footerSub: { fontSize: 13, fontWeight: "600", color: OUTLINE_VARIANT, marginTop: 4 },
+
+  // Currency modal
+  modalOverlay: { flex: 1, justifyContent: "flex-end" },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
+  modalSheet: { backgroundColor: SURFACE_LOWEST, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 20, paddingBottom: 48 },
+  sheetHandle: { width: 48, height: 5, backgroundColor: OUTLINE_VARIANT, borderRadius: 3, alignSelf: "center", marginBottom: 20 },
+  sheetTitle: { fontSize: 20, fontWeight: "700", color: ON_SURFACE, marginBottom: 4 },
+  sheetSub: { fontSize: 13, fontWeight: "600", color: ON_SURFACE_VARIANT, marginBottom: 20 },
+  currencyRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: SURFACE_CONTAINER, marginBottom: 8 },
+  currencyRowSelected: { backgroundColor: PRIMARY + "10", borderColor: PRIMARY + "30" },
+  currencySymbol: { width: 40, height: 40, borderRadius: 20, backgroundColor: SURFACE_CONTAINER, justifyContent: "center", alignItems: "center" },
+  currencySymbolText: { fontSize: 14, fontWeight: "700", color: ON_SURFACE_VARIANT },
+  currencyName: { fontSize: 16, fontWeight: "600", color: ON_SURFACE },
+  currencyCode: { fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
+  confirmBtn: { backgroundColor: PRIMARY, borderRadius: 12, paddingVertical: 16, alignItems: "center" },
+  confirmBtnText: { fontSize: 16, fontWeight: "600", color: ON_PRIMARY },
 });

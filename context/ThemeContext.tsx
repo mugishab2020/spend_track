@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { Appearance, ColorSchemeName } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { Appearance, ColorSchemeName } from "react-native";
 
 export type ThemeType = "light" | "dark" | "system";
 
 export type CurrencyType =
+  | "RWF"
   | "USD"
   | "EUR"
   | "GBP"
@@ -47,54 +48,54 @@ export interface ThemeColors {
 }
 
 const lightTheme: ThemeColors = {
-  background: "#F8FAFC",
-  surface: "#FFFFFF",
-  card: "#FFFFFF",
-  text: "#111827",
-  textSecondary: "#6B7280",
-  textTertiary: "#9CA3AF",
-  border: "#E5E7EB",
-  borderLight: "#F3F4F6",
-  primary: "#3B82F6",
-  primaryLight: "#EBF4FF",
-  success: "#10B981",
-  warning: "#F59E0B",
-  error: "#EF4444",
-  chartIncome: "#10B981",
-  chartExpense: "#EF4444",
+  background: "#f6faf7", // surface
+  surface: "#ebefec", // surface-container
+  card: "#f1f4f2", // surface-container-low
+  text: "#181d1b", // on-surface
+  textSecondary: "#3e4946", // on-surface-variant
+  textTertiary: "#6e7a76", // outline
+  border: "#bdc9c4", // outline-variant
+  borderLight: "#dfe3e1", // surface-variant
+  primary: "#006859", // primary
+  primaryLight: "#9af3de", // primary-fixed
+  success: "#006c49", // secondary
+  warning: "#8f4736", // tertiary
+  error: "#ba1a1a", // error
+  chartIncome: "#006c49", // secondary
+  chartExpense: "#ba1a1a", // error
   chartCategories: [
-    "#FF6384",
-    "#36A2EB",
-    "#FFCE56",
-    "#4BC0C0",
-    "#9966FF",
-    "#FF9F40",
+    "#006859", // primary
+    "#006c49", // secondary
+    "#8f4736", // tertiary
+    "#228271", // primary-container
+    "#6cf8bb", // secondary-container
+    "#ad5f4d", // tertiary-container
   ],
 };
 
 const darkTheme: ThemeColors = {
-  background: "#0F172A",
-  surface: "#1E293B",
-  card: "#334155",
+  background: "#020E1E",
+  surface: "#0B1F3F",
+  card: "#103456",
   text: "#F8FAFC",
   textSecondary: "#CBD5E1",
   textTertiary: "#94A3B8",
   border: "#334155",
-  borderLight: "#475569",
-  primary: "#3B82F6",
-  primaryLight: "#1E40AF",
+  borderLight: "#2A4A7A",
+  primary: "#22C55E",
+  primaryLight: "#4ADE80",
   success: "#10B981",
   warning: "#F59E0B",
-  error: "#EF4444",
+  error: "#e2b4b4ff",
   chartIncome: "#10B981",
-  chartExpense: "#EF4444",
+  chartExpense: "#b6e5caff",
   chartCategories: [
-    "#FF6384",
-    "#36A2EB",
-    "#FFCE56",
-    "#4BC0C0",
-    "#9966FF",
-    "#FF9F40",
+    "#22C55E",
+    "#16A34A",
+    "#15803D",
+    "#166534",
+    "#14532D",
+    "#0F766E",
   ],
 };
 
@@ -131,6 +132,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         if (
           savedCurrency &&
           [
+            "RWF",
             "USD",
             "EUR",
             "GBP",

@@ -1,158 +1,138 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-import type {
-  Transaction,
-  TransactionCategory,
-  TransactionType,
-} from "@/types/transaction";
-import { calculateBalance, calculateTotalByType } from "@/utils/money";
+import { apiClient } from "@/services/api";
+import { runDailyDigestIfNeeded } from "@/services/dailyDigest.service";
+import { useNotifications } from "./NotificationsContext";
+import type { Transaction, TransactionCategory, TransactionType } from "@/types/transaction";
+import { useAuth } from "./AuthContext";
 
 export type NewTransactionInput = {
   title: string;
   amount: number;
   type: TransactionType;
-  category: TransactionCategory;
-  date: string; // ISO string
+  category: TransactionCategory;   // UUID for expense, label for income
+  date: string;
+  description?: string;
 };
 
 type TransactionsContextValue = {
   transactions: ReadonlyArray<Transaction>;
-  addTransaction: (input: NewTransactionInput) => void;
-  totals: {
-    income: number;
-    expenses: number;
-    balance: number;
-  };
+  addTransaction: (input: NewTransactionInput) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  refreshTransactions: () => Promise<void>;
+  isLoading: boolean;
+  error: string | null;
+  totals: { income: number; expenses: number; balance: number };
 };
 
-const TransactionsContext = createContext<TransactionsContextValue | null>(
-  null,
-);
+const TransactionsContext = createContext<TransactionsContextValue | null>(null);
 
-function createId(): string {
-  // Local-first friendly; replace with UUID later if needed.
-  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+// Normalize the unified /transactions response to our Transaction type
+function normalize(raw: any): Transaction {
+  return {
+    id: raw.id,
+    title: raw.description || raw.category || (raw.type === "income" ? "Income" : "Expense"),
+    amount: raw.amount,
+    type: raw.type,
+    category: raw.category_id ?? raw.category ?? "",
+    date: raw.created_at ?? new Date().toISOString(),
+    createdAt: raw.created_at ?? new Date().toISOString(),
+  };
 }
 
-export function TransactionsProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    // Sample data for demonstration
-    {
-      id: "1",
-      title: "Salary",
-      amount: 5000,
-      type: "income",
-      category: "Salary",
-      date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "2",
-      title: "Freelance Project",
-      amount: 1200,
-      type: "income",
-      category: "Freelance",
-      date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 days ago
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "3",
-      title: "Grocery Shopping",
-      amount: 150,
-      type: "expense",
-      category: "Food",
-      date: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "4",
-      title: "Gas Station",
-      amount: 60,
-      type: "expense",
-      category: "Transportation",
-      date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "5",
-      title: "Coffee Shop",
-      amount: 25,
-      type: "expense",
-      category: "Food",
-      date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "6",
-      title: "Movie Tickets",
-      amount: 40,
-      type: "expense",
-      category: "Entertainment",
-      date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "7",
-      title: "Internet Bill",
-      amount: 80,
-      type: "expense",
-      category: "Utilities",
-      date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 days ago
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "8",
-      title: "Bonus",
-      amount: 800,
-      type: "income",
-      category: "Bonus",
-      date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(), // 45 days ago
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+export function TransactionsProvider({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  const { addNotification } = useNotifications();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const addTransaction = (input: NewTransactionInput) => {
-    const now = new Date().toISOString();
-    const next: Transaction = {
-      id: createId(),
-      title: input.title.trim(),
-      amount: input.amount,
-      type: input.type,
-      category: input.category,
-      date: input.date,
-      createdAt: now,
-    };
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadTransactions();
+      runDailyDigestIfNeeded(addNotification);
+    } else {
+      setTransactions([]);
+    }
+  }, [isAuthenticated]);
 
-    setTransactions((prev) => [next, ...prev]);
+  const loadTransactions = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const now = new Date();
+      const res = await apiClient.get<any>(
+        `/transactions?month=${now.getMonth() + 1}&year=${now.getFullYear()}&limit=500`
+      );
+      const items: any[] = res.data?.items ?? [];
+      setTransactions(items.map(normalize));
+    } catch (err: any) {
+      setError(err.message || "Failed to load transactions");
+      console.error("Load transactions error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addTransaction = async (input: NewTransactionInput) => {
+    setError(null);
+    try {
+      const now = new Date();
+      const body: any = {
+        amount: input.amount,
+        type: input.type,
+        description: input.description,
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+        source: "manual",
+        status: "completed",
+      };
+
+      if (input.type === "expense") {
+        body.category_id = input.category;
+      } else {
+        body.category = input.category; // e.g. "Salary"
+      }
+
+      const res = await apiClient.post<any>("/transactions", body);
+      setTransactions((prev) => [normalize(res.data), ...prev]);
+    } catch (err: any) {
+      setError(err.message || "Failed to add transaction");
+      throw err;
+    }
+  };
+
+  const deleteTransaction = async (id: string) => {
+    setError(null);
+    try {
+      await apiClient.delete(`/transactions/${id}`);
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+    } catch (err: any) {
+      setError(err.message || "Failed to delete transaction");
+      throw err;
+    }
+  };
+
+  const refreshTransactions = async () => {
+    await loadTransactions();
   };
 
   const totals = useMemo(() => {
-    const income = calculateTotalByType(transactions, "income");
-    const expenses = calculateTotalByType(transactions, "expense");
-    const balance = calculateBalance(transactions);
-    return { income, expenses, balance };
+    const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+    const expenses = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+    return { income, expenses, balance: income - expenses };
   }, [transactions]);
 
   const value = useMemo<TransactionsContextValue>(
-    () => ({ transactions, addTransaction, totals }),
-    [transactions, totals],
+    () => ({ transactions, addTransaction, deleteTransaction, refreshTransactions, isLoading, error, totals }),
+    [transactions, totals, isLoading, error],
   );
 
-  return (
-    <TransactionsContext.Provider value={value}>
-      {children}
-    </TransactionsContext.Provider>
-  );
+  return <TransactionsContext.Provider value={value}>{children}</TransactionsContext.Provider>;
 }
 
 export function useTransactions(): TransactionsContextValue {
   const ctx = useContext(TransactionsContext);
-  if (!ctx) {
-    throw new Error("useTransactions must be used within TransactionsProvider");
-  }
+  if (!ctx) throw new Error("useTransactions must be used within TransactionsProvider");
   return ctx;
 }
