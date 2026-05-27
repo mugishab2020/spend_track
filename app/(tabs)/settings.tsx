@@ -11,8 +11,12 @@ import {
   Switch,
   Text,
   View,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme, type ThemeType, type CurrencyType } from "@/context/ThemeContext";
@@ -54,6 +58,7 @@ const CURRENCIES: { code: CurrencyType; name: string; symbol: string }[] = [
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const { theme, setTheme, currency, setCurrency } = useTheme();
+  const [isExporting, setIsExporting] = useState(false);
   const [notificationsOn, setNotificationsOn] = useState(true);
   const [currencyModal, setCurrencyModal] = useState(false);
   const [pendingCurrency, setPendingCurrency] = useState<CurrencyType>(currency as CurrencyType);
@@ -79,6 +84,82 @@ export default function SettingsScreen() {
     // Also update on backend
     try { await apiClient.put("/users/me", { currency: pendingCurrency }); } catch {}
     setCurrencyModal(false);
+  };
+
+  const buildTransactionPdfHtml = (items: any[]) => {
+    const rows = items.map((tx) => `
+      <tr>
+        <td>${tx.created_at || tx.date || ""}</td>
+        <td>${tx.type || ""}</td>
+        <td>${tx.category || ""}</td>
+        <td>${tx.amount != null ? tx.amount : ""}</td>
+        <td>${tx.description || tx.title || ""}</td>
+        <td>${tx.source || ""}</td>
+        <td>${tx.status || ""}</td>
+      </tr>`).join("");
+
+    return `
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <style>
+            body { font-family: Arial, sans-serif; color: #111; padding: 20px; }
+            h1 { color: #006859; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th, td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 12px; }
+            th { background: #f1f4f2; }
+            tr:nth-child(even) { background: #fbfcfb; }
+            .summary { margin-top: 16px; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <h1>SpendTrack Transaction Export</h1>
+          <p class="summary">Exported ${items.length} transaction${items.length === 1 ? "" : "s"}.</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Description</th>
+                <th>Source</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </body>
+      </html>`;
+  };
+  const handleExportData = async () => {
+    setIsExporting(true);
+    try {
+      const response = await apiClient.get<any>('/transactions?limit=1000&offset=0');
+      const transactions = response.data?.items || [];
+      if (!transactions.length) {
+        Alert.alert('Export complete', 'No transactions were found to export.');
+        return;
+      }
+      const html = buildTransactionPdfHtml(transactions);
+      const { uri } = await Print.printToFileAsync({ html });
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        Alert.alert('Export failed', 'Sharing is not available on this device.');
+        return;
+      }
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: 'Share SpendTrack PDF',
+      });
+    } catch (error: any) {
+      console.error('Export failed:', error);
+      Alert.alert('Export failed', error?.message || 'Unable to export your data. Please try again later.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const curObj = CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0];
@@ -158,7 +239,7 @@ export default function SettingsScreen() {
           <SettingRow
             iconBg={SURFACE_CONTAINER_LOW} icon="download" iconColor={ON_SURFACE_VARIANT}
             title="Export Data" sub="Download transaction history"
-            onPress={() => Alert.alert("Coming soon", "Export feature is coming soon.")}
+            onPress={handleExportData}
             right={<FontAwesome name="chevron-right" size={14} color={OUTLINE_VARIANT} />}
           />
           <Divider />
@@ -204,6 +285,15 @@ export default function SettingsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {isExporting && (
+        <View style={s.exportOverlay} pointerEvents="none">
+          <View style={s.exportBox}>
+            <ActivityIndicator size="large" color={PRIMARY} />
+            <Text style={s.exportText}>Preparing export…</Text>
+          </View>
+        </View>
+      )}
 
       {/* Currency modal */}
       <Modal visible={currencyModal} animationType="slide" transparent onRequestClose={() => setCurrencyModal(false)}>
@@ -309,4 +399,7 @@ const s = StyleSheet.create({
   currencyCode: { fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
   confirmBtn: { backgroundColor: PRIMARY, borderRadius: 12, paddingVertical: 16, alignItems: "center" },
   confirmBtnText: { fontSize: 16, fontWeight: "600", color: ON_PRIMARY },
+  exportOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.18)" },
+  exportBox: { backgroundColor: SURFACE_LOWEST, padding: 20, borderRadius: 18, alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 6 },
+  exportText: { marginTop: 12, fontSize: 15, fontWeight: "600", color: ON_SURFACE },
 });
