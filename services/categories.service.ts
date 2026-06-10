@@ -7,6 +7,7 @@ export interface Category {
   icon: string;
   type?: "income" | "expense";
   cap_amount?: number | null;
+  is_locked?: boolean;
 }
 
 export interface CreateCategoryDto {
@@ -19,12 +20,14 @@ export interface CreateCategoryDto {
 export const categoriesService = {
   async getAll(): Promise<Category[]> {
     const response = await apiClient.get<any>(API_ENDPOINTS.CATEGORIES);
-    return response.data; // Extract categories array from response wrapper
+    // Backend wraps responses under a `data` key: { data: [...] }
+    // Unwrap so callers receive the actual Category[] array
+    return response.data?.data ?? response.data;
   },
 
   async create(data: CreateCategoryDto): Promise<Category> {
     const response = await apiClient.post<any>(API_ENDPOINTS.CATEGORIES, data);
-    return response.data; // Extract created category from response wrapper
+    return response.data?.data ?? response.data;
   },
 
   async update(
@@ -35,7 +38,7 @@ export const categoriesService = {
       API_ENDPOINTS.CATEGORY_BY_ID(id),
       data,
     );
-    return response.data; // Extract updated category from response wrapper
+    return response.data?.data ?? response.data;
   },
 
   async delete(id: string): Promise<void> {

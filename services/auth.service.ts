@@ -8,10 +8,11 @@ export interface LoginCredentials {
 }
 
 export interface RegisterCredentials {
-  name: string;
+  username: string;
   email: string;
   password: string;
-  phone_number?: string;
+  confirm_password: string;
+  phone_number: string;
   currency?: string;
   monthly_income?: number;
   savings_target_type?: string;
@@ -99,14 +100,11 @@ export const authService = {
       const response = await apiClient.post<any>(
         API_ENDPOINTS.REGISTER,
         {
-          full_name: credentials.name,
+          username: credentials.username,
           email: credentials.email,
+          phone_number: credentials.phone_number,
           password: credentials.password,
-          phone_number: credentials.phone_number || null,
-          currency: credentials.currency || "RWF",
-          monthly_income: credentials.monthly_income || 0,
-          savings_target_type: credentials.savings_target_type || "percentage",
-          savings_target_value: credentials.savings_target_value || 20,
+          confirm_password: credentials.confirm_password,
         },
       );
 

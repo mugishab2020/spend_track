@@ -1,4 +1,4 @@
-import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
@@ -17,6 +17,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useProtectedRoute } from "@/hooks/useProtectedRoute";
 import { apiClient } from "@/services/api";
 import { formatCurrency } from "@/utils/money";
+import { mapLegacyIcon } from "@/utils/icons";
 
 type Tab = "insights" | "plan" | "optimize" | "lifestyle";
 
@@ -79,7 +80,7 @@ export default function AIInsightsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: colors.surface }]}>
-          <FontAwesome name="arrow-left" size={20} color={colors.text} />
+          <MaterialCommunityIcons name="arrow-left" size={20} color={colors.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: colors.text }]}>AI Financial Advisor</Text>
@@ -100,7 +101,7 @@ export default function AIInsightsScreen() {
             onPress={() => setActiveTab(t.key)}
             style={[styles.tab, activeTab === t.key && { backgroundColor: colors.primary, borderRadius: 10 }]}
           >
-            <FontAwesome name={t.icon as any} size={12} color={activeTab === t.key ? "#fff" : colors.textSecondary} />
+            <MaterialCommunityIcons name={mapLegacyIcon(t.icon) as any} size={12} color={activeTab === t.key ? "#fff" : colors.textSecondary} />
             <Text style={[styles.tabText, { color: activeTab === t.key ? "#fff" : colors.textSecondary }]}>
               {t.label}
             </Text>
@@ -172,7 +173,7 @@ export default function AIInsightsScreen() {
                     <View key={i} style={[styles.optCard, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: cat.color }]}>
                       <View style={styles.optCardHeader}>
                         <View style={[styles.iconWrap, { backgroundColor: cat.color + "20" }]}>
-                          <FontAwesome name={(cat.icon || "tag") as any} size={15} color={cat.color} />
+                          <MaterialCommunityIcons name={mapLegacyIcon(cat.icon || "tag") as any} size={15} color={cat.color} />
                         </View>
                         <View style={{ flex: 1 }}>
                           <View style={styles.optTitleRow}>
@@ -194,7 +195,7 @@ export default function AIInsightsScreen() {
                       <Text style={[styles.cardBody, { color: colors.textSecondary }]}>{cat.advice}</Text>
                       {cat.potential_saving > 0 && (
                         <View style={styles.chip}>
-                          <FontAwesome name="leaf" size={11} color="#10B981" style={{ marginRight: 4 }} />
+                          <MaterialCommunityIcons name="leaf" size={11} color="#10B981" style={{ marginRight: 4 }} />
                           <Text style={styles.chipText}>Save up to {formatCurrency(cat.potential_saving, optimize.currency)}/month</Text>
                         </View>
                       )}
@@ -219,7 +220,7 @@ export default function AIInsightsScreen() {
                   {!!lifestyle.ai_tips && (
                     <View style={[styles.aiTipsCard, { backgroundColor: colors.card, borderColor: colors.primary }]}>
                       <View style={styles.aiTipsHeader}>
-                        <FontAwesome name="star" size={14} color={colors.primary} />
+                        <MaterialCommunityIcons name="star" size={14} color={colors.primary} />
                         <Text style={[styles.aiTipsTitle, { color: colors.primary }]}>AI Personalised Tips</Text>
                       </View>
                       <Text style={[styles.cardBody, { color: colors.text }]}>{lifestyle.ai_tips}</Text>
@@ -254,7 +255,7 @@ export default function AIInsightsScreen() {
                               {formatCurrency(tier.budget, lifestyle.currency)}/mo
                             </Text>
                             {isNavigable && (
-                              <FontAwesome name="chevron-right" size={12} color={colors.textSecondary} />
+                              <MaterialCommunityIcons name="chevron-right" size={12} color={colors.textSecondary} />
                             )}
                           </View>
                         </View>
@@ -269,14 +270,14 @@ export default function AIInsightsScreen() {
                         <Text style={[styles.cardBody, { color: colors.textSecondary }]}>{tier.tip}</Text>
                         {isNavigable && (
                           <View style={[styles.dailyChip, { backgroundColor: colors.primary + "15" }]}>
-                            <FontAwesome name={isFoodTier ? "cutlery" : "bus"} size={11} color={colors.primary} style={{ marginRight: 4 }} />
+                            <MaterialCommunityIcons name={mapLegacyIcon(isFoodTier ? "cutlery" : "bus") as any} size={11} color={colors.primary} style={{ marginRight: 4 }} />
                             <Text style={[styles.dailyChipText, { color: colors.primary }]}>
                               Tap to see {isFoodTier ? "meal plan" : "transport plan"} →
                             </Text>
                           </View>
                         )}
                         <View style={[styles.dailyChip, { backgroundColor: colors.primary + "15", marginTop: 4 }]}>
-                          <FontAwesome name="clock-o" size={11} color={colors.primary} style={{ marginRight: 4 }} />
+                          <MaterialCommunityIcons name={mapLegacyIcon("clock-o") as any} size={11} color={colors.primary} style={{ marginRight: 4 }} />
                           <Text style={[styles.dailyChipText, { color: colors.primary }]}>
                             Daily allowance: {formatCurrency(tier.budget / 30, lifestyle.currency)}
                           </Text>
@@ -301,7 +302,7 @@ function InsightCard({ item, colors }: { item: any; colors: any }) {
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: item.color }]}>
       <View style={[styles.iconWrap, { backgroundColor: item.color + "20" }]}>
-        <FontAwesome name={item.icon as any} size={16} color={item.color} />
+        <MaterialCommunityIcons name={mapLegacyIcon(item.icon) as any} size={16} color={item.color} />
       </View>
       <View style={styles.cardContent}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
@@ -335,7 +336,7 @@ function BannerDivider() {
 function Empty({ colors, msg }: { colors: any; msg: string }) {
   return (
     <View style={styles.empty}>
-      <FontAwesome name="lightbulb-o" size={48} color={colors.textSecondary} />
+      <MaterialCommunityIcons name={mapLegacyIcon("lightbulb-o") as any} size={48} color={colors.textSecondary} />
       <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{msg}</Text>
     </View>
   );

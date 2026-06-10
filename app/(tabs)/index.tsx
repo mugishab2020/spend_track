@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -32,6 +32,7 @@ import { buildFlwOptions, FlwRedirectParams } from "@/services/flutterwave.servi
 import { notifyCategoryWarning, notifyAiPlanApplied } from "@/services/notifications.service";
 import { formatCurrency } from "@/utils/money";
 import { mapLegacyIcon } from "@/utils/icons";
+import { SkeletonInsightCard, SkeletonPlanCard } from "@/components/SkeletonLoader";
 import { PayWithFlutterwave } from "flutterwave-react-native";
 
 type FlwOptions = Parameters<typeof PayWithFlutterwave>[0]["options"];
@@ -60,11 +61,26 @@ export default function DashboardScreen() {
   const [aiPlanError, setAiPlanError] = useState<string | null>(null);
   const [editingPlans, setEditingPlans] = useState<Record<string, string>>({});
   const [applyingPlan, setApplyingPlan] = useState(false);
+  const [walletBalance, setWalletBalance] = useState({ income: 0, expenses: 0, balance: 0 });
+
+  // Simple cache with 5-minute expiry for AI responses
+  const aiCacheRef = useRef<{ 
+    insights?: { data: any[], timestamp: number },
+    plan?: { data: any, timestamp: number }
+  }>({});
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   useFocusEffect(useCallback(() => {
     const now = new Date();
     const m = now.getMonth() + 1;
     const y = now.getFullYear();
+    const currentTime = Date.now();
+    
+    // Fetch wallet balance (all-time totals)
+    apiClient.get<any>("/wallet/balance")
+      .then((res) => setWalletBalance(res.data))
+      .catch((error) => console.error("Failed to load wallet balance:", error));
+    
     // Fetch monthly income for chart
     Promise.all(Array.from({ length: 6 }, async (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
@@ -74,35 +90,58 @@ export default function DashboardScreen() {
         return [key, (res.data?.items ?? []).reduce((s: number, r: any) => s + r.amount, 0)] as [string, number];
       } catch { return [key, 0] as [string, number]; }
     })).then((entries) => setMonthlyIncome(Object.fromEntries(entries)));
-    // Fetch AI insights
-    setAiLoading(true);
-    setAiError(null);
-    apiClient.get<any>(`/ai/insights?month=${m}&year=${y}`)
-      .then((res) => {
-        const insights = res.data?.insights ?? [];
-        setAiInsights(insights);
-        setTopInsight(insights?.[0] ?? null);
-      })
-      .catch((error) => {
-        console.error("AI insights load failed", error);
-        setAiInsights([]);
-        setTopInsight(null);
-        setAiError("Could not load AI analysis right now.");
-      })
-      .finally(() => setAiLoading(false));
-    // Fetch AI spending plan
-    setAiPlanLoading(true);
-    setAiPlanError(null);
-    apiClient.get<any>(`/ai/plan?month=${m}&year=${y}`)
-      .then((res) => {
-        setAiPlan(res.data);
-      })
-      .catch((error) => {
-        console.error("AI plan load failed", error);
-        setAiPlan(null);
-        setAiPlanError("Could not load AI spending plan right now.");
-      })
-      .finally(() => setAiPlanLoading(false));
+    
+    // Fetch AI insights (with caching)
+    const cachedInsights = aiCacheRef.current.insights;
+    if (cachedInsights && (currentTime - cachedInsights.timestamp) < CACHE_DURATION) {
+      // Use cached data
+      setAiInsights(cachedInsights.data);
+      setTopInsight(cachedInsights.data[0] ?? null);
+      setAiLoading(false);
+    } else {
+      // Fetch fresh data
+      setAiLoading(true);
+      setAiError(null);
+      apiClient.get<any>(`/ai/insights?month=${m}&year=${y}`)
+        .then((res) => {
+          const insights = res.data?.insights ?? [];
+          setAiInsights(insights);
+          setTopInsight(insights?.[0] ?? null);
+          // Cache the result
+          aiCacheRef.current.insights = { data: insights, timestamp: currentTime };
+        })
+        .catch((error) => {
+          console.error("AI insights load failed", error);
+          setAiInsights([]);
+          setTopInsight(null);
+          setAiError("Could not load AI analysis right now.");
+        })
+        .finally(() => setAiLoading(false));
+    }
+    
+    // Fetch AI spending plan (with caching)
+    const cachedPlan = aiCacheRef.current.plan;
+    if (cachedPlan && (currentTime - cachedPlan.timestamp) < CACHE_DURATION) {
+      // Use cached data
+      setAiPlan(cachedPlan.data);
+      setAiPlanLoading(false);
+    } else {
+      // Fetch fresh data
+      setAiPlanLoading(true);
+      setAiPlanError(null);
+      apiClient.get<any>(`/ai/plan?month=${m}&year=${y}`)
+        .then((res) => {
+          setAiPlan(res.data);
+          // Cache the result
+          aiCacheRef.current.plan = { data: res.data, timestamp: currentTime };
+        })
+        .catch((error) => {
+          console.error("AI plan load failed", error);
+          setAiPlan(null);
+          setAiPlanError("Could not load AI spending plan right now.");
+        })
+        .finally(() => setAiPlanLoading(false));
+    }
   }, []));
 
   const applyAiPlan = async () => {
@@ -167,10 +206,10 @@ export default function DashboardScreen() {
 
   const fallbackInsights = useMemo(() => {
     const tips: any[] = [];
-    if (totals.expenses > totals.income) {
+    if (walletBalance.expenses > walletBalance.income) {
       tips.push({
         title: "Spend less than you earn",
-        body: `Your expenses are currently ${formatCurrency(totals.expenses - totals.income, currency)} above income. Review discretionary categories and reduce non-essential spending.`,
+        body: `Your expenses are currently ${formatCurrency(walletBalance.expenses - walletBalance.income, currency)} above income. Review discretionary categories and reduce non-essential spending.`,
         icon: "alert-circle-outline",
         color: "#DC2626",
       });
@@ -203,7 +242,7 @@ export default function DashboardScreen() {
       });
     }
     return tips.slice(0, 2);
-  }, [totals, goal, goalPct, categoryData, currency, colors.primary]);
+  }, [walletBalance, goal, goalPct, categoryData, currency, colors.primary]);
 
   const displayedInsights = aiLoading ? [] : (aiInsights.length > 0 ? aiInsights : fallbackInsights);
 
@@ -274,7 +313,7 @@ export default function DashboardScreen() {
           <View style={[styles.balanceBlob, styles.blob2]} />
           
           <Text style={styles.balanceLabel}>TOTAL BALANCE</Text>
-          <Text style={styles.balanceAmount}>{currency} {totals.balance.toLocaleString()}</Text>
+          <Text style={styles.balanceAmount}>{currency} {walletBalance.balance.toLocaleString()}</Text>
           
           <View style={styles.balanceGrid}>
             <View style={styles.balanceItem}>
@@ -283,7 +322,7 @@ export default function DashboardScreen() {
               </View>
               <View>
                 <Text style={styles.balanceSubLabel}>INCOME</Text>
-                <Text style={styles.balanceSubValue}>{currency} {totals.income.toLocaleString()}</Text>
+                <Text style={styles.balanceSubValue}>{currency} {walletBalance.income.toLocaleString()}</Text>
               </View>
             </View>
             <View style={styles.balanceItem}>
@@ -292,7 +331,7 @@ export default function DashboardScreen() {
               </View>
               <View>
                 <Text style={styles.balanceSubLabel}>EXPENSES</Text>
-                <Text style={styles.balanceSubValue}>{currency} {totals.expenses.toLocaleString()}</Text>
+                <Text style={styles.balanceSubValue}>{currency} {walletBalance.expenses.toLocaleString()}</Text>
               </View>
             </View>
           </View>
@@ -312,10 +351,10 @@ export default function DashboardScreen() {
               </View>
             </View>
             {aiLoading ? (
-              <View style={styles.aiLoading}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={[styles.aiLoadingText, { color: colors.textSecondary }]}>Loading AI insights...</Text>
-              </View>
+              <>
+                <SkeletonInsightCard colors={colors} />
+                <SkeletonInsightCard colors={colors} />
+              </>
             ) : (
               displayedInsights.map((item, idx) => (
                 <View key={idx} style={[styles.aiTipCard, { backgroundColor: colors.card, borderColor: item.color || colors.primary }]}> 
@@ -329,10 +368,25 @@ export default function DashboardScreen() {
                 </View>
               ))
             )}
-            <Pressable style={[styles.aiChatButton, { backgroundColor: colors.primary }]} onPress={() => router.push("/ai-chat")}> 
-              <MaterialCommunityIcons name="chat-processing" size={18} color="#FFF" />
-              <Text style={styles.aiChatButtonText}>Ask AI for tips</Text>
-            </Pressable>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable 
+                style={[styles.aiChatButton, { backgroundColor: colors.primary, flex: 1 }]} 
+                onPress={() => router.push("/ai-chat")}
+              > 
+                <MaterialCommunityIcons name="chat-processing" size={18} color="#FFF" />
+                <Text style={styles.aiChatButtonText}>Ask AI</Text>
+              </Pressable>
+              <Pressable 
+                style={[styles.aiChatButton, { backgroundColor: "#8B5CF6", flex: 1 }]} 
+                onPress={async () => {
+                  const { triggerAICategorization } = await import("@/utils/aiCategorization");
+                  triggerAICategorization(() => refreshTransactions());
+                }}
+              > 
+                <MaterialCommunityIcons name="tag-multiple" size={18} color="#FFF" />
+                <Text style={styles.aiChatButtonText}>Auto-Categorize</Text>
+              </Pressable>
+            </View>
           </View>
 
           {/* AI Spending Plan Section */}
@@ -347,10 +401,11 @@ export default function DashboardScreen() {
               </View>
             </View>
             {aiPlanLoading ? (
-              <View style={styles.aiLoading}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={[styles.aiLoadingText, { color: colors.textSecondary }]}>Generating AI spending plan...</Text>
-              </View>
+              <>
+                <SkeletonPlanCard colors={colors} />
+                <SkeletonPlanCard colors={colors} />
+                <SkeletonPlanCard colors={colors} />
+              </>
             ) : aiPlan?.plan ? (
               <>
                 {aiPlan.ai_plan_summary ? (

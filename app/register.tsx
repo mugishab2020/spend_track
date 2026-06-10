@@ -31,7 +31,7 @@ const COUNTRY_CODES = ["+250", "+1", "+44", "+33", "+49", "+254", "+255"];
 export default function RegisterScreen() {
   const { colors } = useTheme();
   const { register, socialLogin, isLoading } = useAuth();
-  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [countryCode, setCountryCode] = useState("+250");
@@ -40,15 +40,9 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  
-  // Step 2 Fields
-  const [step, setStep] = useState(1);
-  const [currency, setCurrency] = useState("RWF");
-  const [monthlyIncome, setMonthlyIncome] = useState("");
-  const [savingsTarget, setSavingsTarget] = useState("20"); // 20% by default
 
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
+    if (!username.trim() || !email.trim() || !phone.trim() || !password.trim() || !confirmPassword.trim()) {
       Alert.alert("Missing fields", "Please fill in all required fields.");
       return;
     }
@@ -60,27 +54,29 @@ export default function RegisterScreen() {
       Alert.alert("Weak password", "Password must be at least 8 characters.");
       return;
     }
-    setStep(2);
-  };
+    if (username.length < 3) {
+      Alert.alert("Invalid username", "Username must be at least 3 characters.");
+      return;
+    }
 
-  const handleFinalRegister = async () => {
     try {
       await register({
-        name: name.trim(),
+        username: username.trim(),
         email: email.trim(),
         password,
-        phone_number: phone.trim() ? `${countryCode}${phone.trim()}` : undefined,
-        currency,
-        monthly_income: parseFloat(monthlyIncome) || 0,
-        savings_target_type: "percentage",
-        savings_target_value: parseFloat(savingsTarget) || 20,
+        confirm_password: confirmPassword,
+        phone_number: `${countryCode}${phone.trim()}`,
       });
       router.replace("/(tabs)");
     } catch (error: any) {
       let msg = "Could not create account. Please try again.";
       if (error.status === 408) msg = "Connection timeout.";
       else if (error.status === 0) msg = "Backend unreachable.";
-      else if (error.status === 409) msg = "Email already registered.";
+      else if (error.status === 400) {
+        if (error.data?.detail?.includes("Email")) msg = "Email already registered.";
+        else if (error.data?.detail?.includes("Username")) msg = "Username already taken.";
+        else msg = error.data?.detail || msg;
+      }
       else if (error.message) msg = error.message;
       Alert.alert("Registration failed", msg);
     }
@@ -175,29 +171,26 @@ export default function RegisterScreen() {
               <View style={[styles.content, { backgroundColor: colors.background }]}>
                 <View style={styles.formHeader}>
                   <Text style={[styles.title, { color: colors.text }]}>
-                    {step === 1 ? "Let us get you Started!" : "Financial Onboarding"}
+                    Let us get you Started!
                   </Text>
                   <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                    {step === 1 
-                      ? "Join others to track and grow your finances" 
-                      : "Help us personalize your budget recommendations"}
+                    Join others to track and grow your finances
                   </Text>
                 </View>
 
-                {step === 1 ? (
-                  /* Step 1: Basic Info */
-                  <View style={styles.form}>
-                  {/* Full Name */}
+                {/* Registration Form */}
+                <View style={styles.form}>
+                  {/* Username */}
                   <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: colors.textTertiary }]}>FULL NAME</Text>
+                    <Text style={[styles.label, { color: colors.textTertiary }]}>USERNAME</Text>
                     <View style={[styles.inputWrapper, { backgroundColor: "#F0FDF9" }]}>
                       <TextInput
                         style={[styles.input, { color: colors.text }]}
-                        placeholder="John Doe"
+                        placeholder="johndoe"
                         placeholderTextColor={colors.border}
-                        value={name}
-                        onChangeText={setName}
-                        autoCapitalize="words"
+                        value={username}
+                        onChangeText={setUsername}
+                        autoCapitalize="none"
                         editable={!isLoading}
                       />
                       <MaterialIcons name="person" size={24} color="rgba(0, 104, 89, 0.4)" style={styles.inputIcon} />
@@ -310,155 +303,72 @@ export default function RegisterScreen() {
                     </View>
                   </View>
 
-                  {/* Next Button */}
+                  {/* Register Button */}
                   <TouchableOpacity
                     style={[styles.registerButton, { backgroundColor: "#2F8C7A" }]}
                     onPress={handleRegister}
                     disabled={isLoading}
                   >
-                    <Text style={styles.registerButtonText}>Next Step</Text>
+                    {isLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.registerButtonText}>Create Account</Text>
+                    )}
                   </TouchableOpacity>
                 </View>
-                ) : (
-                  /* Step 2: Financial Info */
-                  <View style={styles.form}>
-                    {/* Currency */}
-                    <View style={styles.inputGroup}>
-                      <Text style={[styles.label, { color: colors.textTertiary }]}>PREFERRED CURRENCY</Text>
-                      <View style={styles.currencyRow}>
-                        {["RWF", "USD", "EUR", "GBP"].map((curr) => (
-                          <TouchableOpacity
-                            key={curr}
-                            style={[
-                              styles.currencyChip,
-                              { backgroundColor: currency === curr ? "#2F8C7A" : "#F0FDF9" }
-                            ]}
-                            onPress={() => setCurrency(curr)}
-                          >
-                            <Text style={[
-                              styles.currencyChipText,
-                              { color: currency === curr ? "#fff" : "#2F8C7A" }
-                            ]}>
-                              {curr}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-
-                    {/* Monthly Income */}
-                    <View style={styles.inputGroup}>
-                      <Text style={[styles.label, { color: colors.textTertiary }]}>MONTHLY INCOME</Text>
-                      <View style={[styles.inputWrapper, { backgroundColor: "#F0FDF9" }]}>
-                        <TextInput
-                          style={[styles.input, { color: colors.text }]}
-                          placeholder="e.g. 500000"
-                          placeholderTextColor={colors.border}
-                          value={monthlyIncome}
-                          onChangeText={setMonthlyIncome}
-                          keyboardType="numeric"
-                          editable={!isLoading}
-                        />
-                        <MaterialCommunityIcons name="cash" size={24} color="rgba(0, 104, 89, 0.4)" style={styles.inputIcon} />
-                      </View>
-                    </View>
-
-                    {/* Savings Target */}
-                    <View style={styles.inputGroup}>
-                      <Text style={[styles.label, { color: colors.textTertiary }]}>SAVINGS TARGET (%)</Text>
-                      <View style={[styles.inputWrapper, { backgroundColor: "#F0FDF9" }]}>
-                        <TextInput
-                          style={[styles.input, { color: colors.text }]}
-                          placeholder="e.g. 20"
-                          placeholderTextColor={colors.border}
-                          value={savingsTarget}
-                          onChangeText={setSavingsTarget}
-                          keyboardType="numeric"
-                          editable={!isLoading}
-                        />
-                        <MaterialCommunityIcons name="percent" size={24} color="rgba(0, 104, 89, 0.4)" style={styles.inputIcon} />
-                      </View>
-                      <Text style={styles.hintText}>We recommend saving at least 20% of your income.</Text>
-                    </View>
-
-                    {/* Register Button */}
-                    <TouchableOpacity
-                      style={[styles.registerButton, { backgroundColor: "#2F8C7A" }]}
-                      onPress={handleFinalRegister}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <ActivityIndicator color="#fff" />
-                      ) : (
-                        <Text style={styles.registerButtonText}>Complete Registration</Text>
-                      )}
-                    </TouchableOpacity>
-
-                    {/* Back Link */}
-                    <TouchableOpacity
-                      style={styles.backBtn}
-                      onPress={() => setStep(1)}
-                      disabled={isLoading}
-                    >
-                      <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Go Back</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
 
                 {/* Footer Link */}
-                {step === 1 && (
-                  <>
-                    {/* Social Login Divider */}
-                    <View style={styles.divider}>
-                      <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-                      <Text style={[styles.dividerText, { color: colors.border }]}>OR JOIN WITH</Text>
-                      <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-                    </View>
+                <>
+                  {/* Social Login Divider */}
+                  <View style={styles.divider}>
+                    <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                    <Text style={[styles.dividerText, { color: colors.border }]}>OR JOIN WITH</Text>
+                    <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                  </View>
 
-                    {/* Social Buttons */}
-                    <View style={styles.socialButtons}>
-                      <TouchableOpacity 
-                        style={[styles.socialButton, { borderColor: colors.border }]}
-                        onPress={() => {
-                          if (Platform.OS === "web" && !process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) {
-                            Alert.alert("Google Login", "Google Social Login is not configured for the Web platform. Please log in using your email and password.");
-                          } else {
-                            googlePromptAsync();
-                          }
+                  {/* Social Buttons */}
+                  <View style={styles.socialButtons}>
+                    <TouchableOpacity 
+                      style={[styles.socialButton, { borderColor: colors.border }]}
+                      onPress={() => {
+                        if (Platform.OS === "web" && !process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) {
+                          Alert.alert("Google Login", "Google Social Login is not configured for the Web platform. Please log in using your email and password.");
+                        } else {
+                          googlePromptAsync();
+                        }
+                      }}
+                      disabled={isLoading}
+                    >
+                      <Image
+                        source={{
+                          uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuBi7Db1bEin9HZuuqetvru_K5-kBCFoXwRYoqNvni-8SvLzgdZ-uzShnjtrVpYjhWzpfnjs2eVviT1qW6WqpoxEnRn1uYcZsPGYo9PhchzFS0fmBt6_-MbTctTlwZhQqa1mfMgIXK5No9rUHtOioDglRi5AWUG6VcWP5UVOb4yfunKgVTEs73Xjs0j6qNHAOHmCETOCO_Pbh5T7mN9iNq_kFlA4YkR9q_x4duoUIwD87F44e1c9FulbJl05bSp0uRuDBCnJtOQGPxA0",
                         }}
-                        disabled={isLoading}
-                      >
-                        <Image
-                          source={{
-                            uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuBi7Db1bEin9HZuuqetvru_K5-kBCFoXwRYoqNvni-8SvLzgdZ-uzShnjtrVpYjhWzpfnjs2eVviT1qW6WqpoxEnRn1uYcZsPGYo9PhchzFS0fmBt6_-MbTctTlwZhQqa1mfMgIXK5No9rUHtOioDglRi5AWUG6VcWP5UVOb4yfunKgVTEs73Xjs0j6qNHAOHmCETOCO_Pbh5T7mN9iNq_kFlA4YkR9q_x4duoUIwD87F44e1c9FulbJl05bSp0uRuDBCnJtOQGPxA0",
-                          }}
-                          style={styles.socialIcon}
-                        />
-                        <Text style={[styles.socialButtonText, { color: colors.text }]}>GOOGLE</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={[styles.socialButton, { borderColor: colors.border }]}
-                        onPress={() => handleSocialLogin("apple")}
-                        disabled={isLoading}
-                      >
-                        <MaterialIcons name="phone-iphone" size={24} color={colors.text} style={styles.socialIcon} />
-                        <Text style={[styles.socialButtonText, { color: colors.text }]}>APPLE</Text>
-                      </TouchableOpacity>
-                    </View>
+                        style={styles.socialIcon}
+                      />
+                      <Text style={[styles.socialButtonText, { color: colors.text }]}>GOOGLE</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.socialButton, { borderColor: colors.border }]}
+                      onPress={() => handleSocialLogin("apple")}
+                      disabled={isLoading}
+                    >
+                      <MaterialIcons name="phone-iphone" size={24} color={colors.text} style={styles.socialIcon} />
+                      <Text style={[styles.socialButtonText, { color: colors.text }]}>APPLE</Text>
+                    </TouchableOpacity>
+                  </View>
 
-                    <View style={styles.footer}>
-                      <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-                        Already have an account?{" "}
-                        <Text
-                          style={[styles.footerLink, { color: colors.primary }]}
-                          onPress={() => router.push("/login")}
-                        >
-                          Login
-                        </Text>
+                  <View style={styles.footer}>
+                    <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+                      Already have an account?{" "}
+                      <Text
+                        style={[styles.footerLink, { color: colors.primary }]}
+                        onPress={() => router.push("/login")}
+                      >
+                        Login
                       </Text>
-                    </View>
-                  </>
-                )}
+                    </Text>
+                  </View>
+                </>
               </View>
             </View>
           </TouchableWithoutFeedback>

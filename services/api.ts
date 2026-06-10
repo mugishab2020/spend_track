@@ -140,7 +140,24 @@ class ApiClient {
       if (response.status === 204) return {} as T;
 
       const data = await response.json();
-      console.log('  Response Data:', JSON.stringify(data, null, 2));
+      // Avoid logging full response bodies (can be large and block the JS thread).
+      try {
+        if (data && typeof data === 'object') {
+          if (Array.isArray(data)) {
+            console.log(`  Response Data: Array[${data.length}]`);
+          } else if (data.items && Array.isArray(data.items)) {
+            console.log(`  Response Data: items=${data.items.length}`);
+          } else if (data.data && Array.isArray(data.data)) {
+            console.log(`  Response Data: data=${data.data.length}`);
+          } else {
+            console.log('  Response Data: object keys=', Object.keys(data).slice(0,10));
+          }
+        } else {
+          console.log('  Response Data:', typeof data);
+        }
+      } catch (e) {
+        console.log('  Response Data: <unavailable>');
+      }
       return data;
     } catch (error) {
       clearTimeout(timeoutId);

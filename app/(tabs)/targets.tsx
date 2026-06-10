@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/AuthContext";
+import { useLocalSearchParams } from "expo-router";
 import { useCategories } from "@/context/CategoriesContext";
 import { useTransactions } from "@/context/TransactionsContext";
 import { apiClient } from "@/services/api";
@@ -82,6 +83,19 @@ export default function AddTransactionScreen() {
     setAmount(""); setDescription(""); setSelectedCat(null);
     setFlwOptions(null); setSubmitting(false);
   };
+
+  // Preselect category when navigated from Categories screen
+  const params: any = useLocalSearchParams();
+  React.useEffect(() => {
+    const catId = params?.preselectedCategoryId || params?.categoryId;
+    if (catId && categories && categories.length > 0) {
+      const found = categories.find((c: any) => c.id === catId);
+      if (found) {
+        setSelectedCat(found);
+        setTxType("expense");
+      }
+    }
+  }, [params, categories]);
 
   const handleManual = async () => {
     const parsed = parseFloat(amount);

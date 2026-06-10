@@ -86,64 +86,230 @@ export default function SettingsScreen() {
     setCurrencyModal(false);
   };
 
-  const buildTransactionPdfHtml = (items: any[]) => {
-    const rows = items.map((tx) => `
-      <tr>
-        <td>${tx.created_at || tx.date || ""}</td>
-        <td>${tx.type || ""}</td>
-        <td>${tx.category || ""}</td>
-        <td>${tx.amount != null ? tx.amount : ""}</td>
-        <td>${tx.description || tx.title || ""}</td>
-        <td>${tx.source || ""}</td>
-        <td>${tx.status || ""}</td>
-      </tr>`).join("");
+  const buildFinancialReportPdfHtml = (report: any) => {
+    const { month, year, user_profile, summary, categories, saving_goals, alerts, ai_insight, transactions } = report;
+    const currency = user_profile?.currency || "RWF";
+    
+    // Format Month
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    const monthName = monthNames[month - 1] || String(month);
+
+    // 1. Transaction Rows
+    const transactionRows = (transactions || []).map((tx: any) => {
+      const dateStr = tx.created_at ? new Date(tx.created_at).toLocaleDateString() : "";
+      const typeLabel = tx.type === "income" ? "Income" : "Expense";
+      const badgeColor = tx.type === "income" ? "#e6f4ea" : "#fce8e6";
+      const textColor = tx.type === "income" ? "#137333" : "#c5221f";
+      
+      return `
+        <tr>
+          <td>${dateStr}</td>
+          <td><span class="badge" style="background-color: ${badgeColor}; color: ${textColor}">${typeLabel}</span></td>
+          <td>${tx.category || "Uncategorized"}</td>
+          <td style="font-weight: bold; text-align: right;">${tx.amount.toLocaleString()} ${currency}</td>
+          <td>${tx.description || ""}</td>
+          <td>${tx.source || ""}</td>
+          <td>${tx.status || ""}</td>
+        </tr>`;
+    }).join("");
+
+    // 2. Category Rows
+    const categoryRows = (categories || []).map((cat: any) => {
+      const capStr = cat.cap_amount ? `${cat.cap_amount.toLocaleString()} ${currency}` : "No limit";
+      const spentStr = `${cat.actual_spent.toLocaleString()} ${currency}`;
+      const pct = cat.utilization_percentage.toFixed(0);
+      const isExceeded = cat.is_exceeded;
+      const progressColor = isExceeded ? "#ba1a1a" : cat.utilization_percentage >= 80 ? "#e67e22" : "#006859";
+      
+      return `
+        <tr>
+          <td>${cat.name}</td>
+          <td style="text-align: right;">${capStr}</td>
+          <td style="text-align: right; font-weight: bold;">${spentStr}</td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="progress-bar-bg" style="width: 100px; height: 6px; background-color: #e5e9e6; border-radius: 3px; overflow: hidden; display: inline-block;">
+                <div class="progress-bar-fill" style="width: ${Math.min(cat.utilization_percentage, 100)}%; height: 100%; border-radius: 3px; background-color: ${progressColor};"></div>
+              </div>
+              <span style="font-size: 11px; font-weight: bold; color: ${progressColor}">${pct}%</span>
+            </div>
+            ${isExceeded ? '<span style="color: #ba1a1a; font-size: 10px; font-weight: bold; display: block; margin-top: 2px;">Over budget!</span>' : ''}
+          </td>
+        </tr>`;
+    }).join("");
+
+    // 3. Saving Goals
+    const savingGoalItems = (saving_goals || []).map((goal: any) => {
+      const targetStr = goal.target_amount ? `${goal.target_amount.toLocaleString()} ${currency}` : "";
+      const percentStr = goal.target_percentage ? `${goal.target_percentage}%` : "";
+      const detail = targetStr && percentStr ? `${targetStr} (${percentStr})` : targetStr || percentStr || "N/A";
+      return `<div class="list-item" style="background-color: #f6faf7; border: 1px solid #bdc9c4; border-radius: 8px; padding: 12px; font-size: 13px; margin-bottom: 8px;"><strong>Saving Goal Target:</strong> ${detail}</div>`;
+    }).join("");
+
+    // 4. Alerts
+    const alertItems = (alerts || []).map((alt: any) => {
+      const dateStr = alt.created_at ? new Date(alt.created_at).toLocaleDateString() : "";
+      return `
+        <div class="list-item alert-item" style="background-color: #f6faf7; border: 1px solid #bdc9c4; border-left: 4px solid #ba1a1a; border-radius: 8px; padding: 12px; font-size: 13px; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: #c5221f;">${alt.title}</strong>
+            <span style="font-size: 11px; color: #6e7a76;">${dateStr}</span>
+          </div>
+          <p style="margin: 4px 0 0 0; font-size: 12px;">${alt.message}</p>
+        </div>`;
+    }).join("");
+
+    // 5. AI Insights
+    const aiInsightHtml = ai_insight ? `
+      <div class="ai-box" style="background-color: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 12px; padding: 18px; margin-top: 16px; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span style="font-size: 18px;">✨</span>
+          <h3 style="margin: 0; color: #006859; font-size: 16px;">AI Summary & suggestions</h3>
+        </div>
+        <p style="font-size: 13px; line-height: 1.5; margin: 0 0 12px 0;"><strong>Summary:</strong> ${ai_insight.summary}</p>
+        <p style="font-size: 13px; line-height: 1.5; margin: 0;"><strong>Suggestions:</strong> ${ai_insight.suggestions}</p>
+      </div>` : `
+      <div class="ai-box" style="background-color: #f6faf7; border: 1px dashed #bdc9c4; border-radius: 12px; padding: 18px; margin-top: 16px; margin-bottom: 16px; text-align: center; color: #6e7a76;">
+        <p style="margin: 0; font-size: 13px;">No AI insights generated for this month yet.</p>
+      </div>`;
 
     return `
       <html>
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <style>
-            body { font-family: Arial, sans-serif; color: #111; padding: 20px; }
-            h1 { color: #006859; }
-            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-            th, td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 12px; }
-            th { background: #f1f4f2; }
-            tr:nth-child(even) { background: #fbfcfb; }
-            .summary { margin-top: 16px; font-size: 14px; }
+            body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #181d1b; background-color: #ffffff; padding: 30px; margin: 0; }
+            .header { border-bottom: 2px solid #ebefec; padding-bottom: 20px; margin-bottom: 24px; }
+            .header-title { color: #006859; font-size: 26px; font-weight: bold; margin: 0; }
+            .header-meta { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 10px; }
+            .user-info { font-size: 13px; color: #3e4946; line-height: 1.4; }
+            .report-period { font-size: 16px; font-weight: bold; color: #006c49; }
+            
+            .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+            .card { background-color: #f6faf7; border: 1px solid #bdc9c4; border-radius: 12px; padding: 16px; box-shadow: 0 2px 4px rgba(0, 104, 89, 0.02); }
+            .card-label { font-size: 11px; font-weight: bold; color: #6e7a76; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+            .card-value { font-size: 18px; font-weight: bold; color: #181d1b; }
+            
+            .section-title { font-size: 18px; font-weight: bold; color: #006859; margin: 28px 0 12px 0; padding-bottom: 6px; border-bottom: 1px solid #ebefec; }
+            
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 16px; }
+            th, td { padding: 12px 10px; text-align: left; font-size: 12px; border-bottom: 1px solid #ebefec; }
+            th { background-color: #f1f4f2; color: #3e4946; font-weight: bold; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+            tr:nth-child(even) td { background-color: #fbfcfb; }
+            
+            .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+            
+            @media (max-width: 600px) {
+              .summary-cards { grid-template-columns: 1fr 1fr; }
+            }
           </style>
         </head>
         <body>
-          <h1>SpendTrack Transaction Export</h1>
-          <p class="summary">Exported ${items.length} transaction${items.length === 1 ? "" : "s"}.</p>
+          <div class="header">
+            <h1 class="header-title">SpendTrack Financial Report</h1>
+            <div class="header-meta">
+              <div class="user-info">
+                <strong>Name:</strong> ${user_profile?.full_name || "User"}<br/>
+                <strong>Email:</strong> ${user_profile?.email || ""}
+              </div>
+              <div class="report-period">
+                ${monthName} ${year}
+              </div>
+            </div>
+          </div>
+          
+          <div class="summary-cards">
+            <div class="card">
+              <div class="card-label">Total Income</div>
+              <div class="card-value" style="color: #137333;">+${summary?.total_income.toLocaleString()} ${currency}</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Total Expenses</div>
+              <div class="card-value" style="color: #c5221f;">-${summary?.total_expenses.toLocaleString()} ${currency}</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Net Savings</div>
+              <div class="card-value" style="color: ${summary?.net_savings >= 0 ? '#137333' : '#c5221f'};">
+                ${summary?.net_savings >= 0 ? '+' : ''}${summary?.net_savings.toLocaleString()} ${currency}
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-label">Savings Rate</div>
+              <div class="card-value">${summary?.savings_rate.toFixed(1)}%</div>
+            </div>
+          </div>
+          
+          <div class="section-title">AI Financial Insights</div>
+          ${aiInsightHtml}
+          
+          <div class="section-title">Category Budgets & Utilization</div>
+          ${categoryRows.length > 0 ? `
+          <table>
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th style="text-align: right;">Limit</th>
+                <th style="text-align: right;">Spent</th>
+                <th>Utilization</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${categoryRows}
+            </tbody>
+          </table>` : '<p style="font-size: 13px; color: #6e7a76;">No custom categories set up.</p>'}
+
+          ${savingGoalItems.length > 0 ? `
+          <div class="section-title">Savings Goals</div>
+          <div class="list-container" style="display: flex; flex-direction: column; gap: 8px;">
+            ${savingGoalItems}
+          </div>` : ''}
+
+          ${alertItems.length > 0 ? `
+          <div class="section-title">Recent Alerts</div>
+          <div class="list-container" style="display: flex; flex-direction: column; gap: 8px;">
+            ${alertItems}
+          </div>` : ''}
+          
+          <div class="section-title">Transaction Details</div>
+          ${transactionRows.length > 0 ? `
           <table>
             <thead>
               <tr>
                 <th>Date</th>
                 <th>Type</th>
                 <th>Category</th>
-                <th>Amount</th>
+                <th style="text-align: right;">Amount</th>
                 <th>Description</th>
                 <th>Source</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              ${rows}
+              ${transactionRows}
             </tbody>
-          </table>
+          </table>` : '<p style="font-size: 13px; color: #6e7a76;">No transactions logged for this period.</p>'}
         </body>
       </html>`;
   };
+
   const handleExportData = async () => {
     setIsExporting(true);
     try {
-      const response = await apiClient.get<any>('/transactions?limit=1000&offset=0');
-      const transactions = response.data?.items || [];
-      if (!transactions.length) {
-        Alert.alert('Export complete', 'No transactions were found to export.');
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+      const response = await apiClient.get<any>(`/reports?month=${month}&year=${year}`);
+      const report = response.data || {};
+      
+      if (!report.summary) {
+        Alert.alert('Export failed', 'Report data could not be generated. Please try again later.');
         return;
       }
-      const html = buildTransactionPdfHtml(transactions);
+      
+      const html = buildFinancialReportPdfHtml(report);
       const { uri } = await Print.printToFileAsync({ html });
       const available = await Sharing.isAvailableAsync();
       if (!available) {
@@ -152,11 +318,11 @@ export default function SettingsScreen() {
       }
       await Sharing.shareAsync(uri, {
         mimeType: 'application/pdf',
-        dialogTitle: 'Share SpendTrack PDF',
+        dialogTitle: 'Share SpendTrack Report',
       });
     } catch (error: any) {
       console.error('Export failed:', error);
-      Alert.alert('Export failed', error?.message || 'Unable to export your data. Please try again later.');
+      Alert.alert('Export failed', error?.message || 'Unable to generate financial report. Please try again later.');
     } finally {
       setIsExporting(false);
     }

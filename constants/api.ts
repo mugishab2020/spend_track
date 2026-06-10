@@ -1,6 +1,6 @@
 export const API_CONFIG = {
   BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL || "http://192.168.1.198:8000/api/v1",
-  TIMEOUT: parseInt(process.env.EXPO_PUBLIC_API_TIMEOUT || "30000"),
+  TIMEOUT: parseInt(process.env.EXPO_PUBLIC_API_TIMEOUT || "60000"),
 };
 
 export const API_ENDPOINTS = {
@@ -28,4 +28,8 @@ export const API_ENDPOINTS = {
 
   // AI endpoints
   AI_CHAT: "/ai/chat",
+  AI_CATEGORIZE_TRANSACTION: "/ai/categorize-transaction",
+  AI_CATEGORIZE_BULK: "/ai/categorize-bulk",
+  AI_DISTRIBUTE_FUNDS_PREVIEW: "/ai/distribute-funds/preview",
+  AI_DISTRIBUTE_FUNDS_APPLY: "/ai/distribute-funds/apply",
 };

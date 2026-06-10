@@ -24,6 +24,10 @@ export function mapLegacyIcon(iconName: string): string {
     "trash": "trash-can",
     "plus": "plus",
     "inbox": "inbox",
+    "clock-o": "clock-outline",
+    "sliders": "tune",
+    "tag": "tag-outline",
+    "bus": "bus",
   };
 
   return mapping[iconName] || iconName;

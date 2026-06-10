@@ -42,4 +42,21 @@ export const aiService = {
 
     throw new Error("Invalid AI response format");
   },
+  async previewDistribution(): Promise<any> {
+    const res = await apiClient.get<any>(API_ENDPOINTS.AI_DISTRIBUTE_FUNDS_PREVIEW);
+    return res.data;
+  },
+
+  async applyDistribution(): Promise<any> {
+    const res = await apiClient.post<any>(API_ENDPOINTS.AI_DISTRIBUTE_FUNDS_APPLY);
+    return res.data;
+  }
+  ,
+  async status(month?: number, year?: number): Promise<any> {
+    const params: any = {};
+    if (month) params.month = month;
+    if (year) params.year = year;
+    const res = await apiClient.get<any>("/ai/status", { params });
+    return res.data;
+  }
 };

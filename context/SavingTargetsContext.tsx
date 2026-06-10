@@ -12,6 +12,7 @@ import {
 } from "../types/savingTarget";
 import { savingTargetsService } from "../services/savingTargets.service";
 import { useAuth } from "./AuthContext";
+import { useCategories } from "./CategoriesContext";
 
 interface SavingTargetsContextType {
   savingTargets: SavingTarget[];
@@ -52,7 +53,8 @@ export function SavingTargetsProvider({
   const [savingTargets, setSavingTargets] = useState<SavingTarget[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const { categories } = useCategories();
 
   const loadSavingTargets = async () => {
     if (!isAuthenticated) return;
@@ -62,7 +64,31 @@ export function SavingTargetsProvider({
 
     try {
       const response = await savingTargetsService.getAll();
-      setSavingTargets(Array.isArray(response) ? response : []);
+      // Prefer authoritative server data. If backend returns an empty list,
+      // synthesize a fallback from the user profile (many deployments expose
+      // `savings_target_value` on the user) so the UI can still show a goal.
+      if (Array.isArray(response) && response.length > 0) {
+        setSavingTargets(response);
+      } else {
+        const userGoalAmount = (user as any)?.savings_target_value ?? (user as any)?.savings_target_amount ?? (user as any)?.savings_target?.targetAmount ?? null;
+        if (userGoalAmount) {
+          setSavingTargets([
+            {
+              id: "user-fallback",
+              userId: user?.id ?? "",
+              month: new Date().getMonth() + 1,
+              year: new Date().getFullYear(),
+              targetAmount: userGoalAmount,
+              currentSaved: (user as any)?.savings_current_saved ?? 0,
+              description: "Fallback from user profile",
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            } as SavingTarget,
+          ]);
+        } else {
+          setSavingTargets([]);
+        }
+      }
     } catch (err: any) {
       setError(err.message || "Failed to load saving targets");
       console.error("Load saving targets error:", err);
@@ -111,9 +137,13 @@ export function SavingTargetsProvider({
     }
   };
 
+  // Load saving targets when auth state changes and whenever categories
+  // change (so updates to the Savings category's `cap_amount` reflect
+  // in the saving targets UI). CategoriesProvider is a parent so
+  // `useCategories` is available and will trigger this effect.
   useEffect(() => {
     loadSavingTargets();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, JSON.stringify(categories)]);
 
   const value: SavingTargetsContextType = {
     savingTargets,
